@@ -1,6 +1,5 @@
 use bevy::prelude::CursorMoved;
 use bevy::prelude::*;
-use bevy::ecs::schedule::SystemSet;
 use bevy::ecs::prelude::{Res, ResMut, Resource};
 
 mod sprite_movement;
@@ -13,10 +12,12 @@ struct Player;
 struct Projectile;
 
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MousePosition {
     pub position: Vec2,
 }
+
+impl Resource for MousePosition {}
 
 
 // Defina a estrutura para armazenar os valores da tela
@@ -29,12 +30,17 @@ pub struct ScreenSize {
 // Implemente o trait Resource para ScreenSize
 impl Resource for ScreenSize {}
 
+// Adicione uma nova estrutura de recursos para armazenar a velocidade do projetil
+#[derive(Debug, Component)]
+pub struct ProjectileSpeed(pub Vec3);
+
 
 
 // Variável global para armazenar os valores das posições do mouse
-static mut MOUSE_POSITION: Option<Vec2> = None;
-
-static mut SCREEN_SIZE: Option<ScreenSize> = None;
+//static mut MOUSE_POSITION: Option<Vec2> = None;
+//static mut SCREEN_SIZE: Option<ScreenSize> = None;
+static mut MOUSE_POSITION: Option<Vec2> = Some(Vec2::ZERO);
+static mut SCREEN_SIZE: Option<ScreenSize> = Some(ScreenSize { width: 0.0, height: 0.0 });
 
 pub fn mouse_position_system(
     mut cursor_mover_events: EventReader<CursorMoved>,
@@ -69,12 +75,23 @@ fn print_screen_size(
 }
 
 
+// Adicione um sistema para mover os projéteis com base na velocidade
+fn projectile_movement_system(
+    time: Res<Time>,
+    mut query: Query<(&Projectile, &mut Transform, &ProjectileSpeed)>,
+) {
+    for (_, mut transform, speed) in query.iter_mut() {
+        transform.translation += speed.0 * time.delta_seconds();    }
+}
 
 fn mouse_click_system(
     mouse_button_input: Res<Input<MouseButton>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     screen_size: Res<ScreenSize>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mouse_position: Res<MousePosition>,
+    //mut query: Query<(&Projectile, &mut Transform, &ProjectileSpeed)>,
 ) {
 
     if mouse_button_input.just_pressed(MouseButton::Left) {
@@ -89,6 +106,11 @@ fn mouse_click_system(
                 let widthdff = mouse_position.x - width;
                 let heightdff = mouse_position.y - height;
 
+                let projectile_position = Vec3::new(widthdff, -heightdff, 0.0);
+                let initial_position = Vec3::new(0.0, 0.0, 0.0);
+
+                let direction = (projectile_position - initial_position).normalize();
+
                 println!("Mouse clicked at width: {}", widthdff);
 
                 commands.spawn(
@@ -96,8 +118,18 @@ fn mouse_click_system(
                     texture: asset_server.load("../assets/player.png"),
                     transform: Transform::from_translation(Vec3::new(widthdff, -heightdff, 0.)),
                     ..SpriteBundle::default()
-                }).insert(Projectile);
+                }).insert(Projectile)
+                .insert(Transform::from_translation(initial_position))
+                .insert(ProjectileSpeed(300.0 * direction));
 
+                if mouse_button_input.just_pressed(MouseButton::Right) {
+                    println!("Right mouse button clicked!");
+                }
+            
+                // Update projectile positions based on speed
+                /*for (_, mut transform, speed) in query.iter_mut() {
+                    transform.translation += speed.0 * 10.0; // Assuming TIME_STEP is the time step between frames
+                }*/
             }
         }
     }
@@ -108,15 +140,19 @@ fn mouse_click_system(
     
 }
 
+
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .insert_resource(ScreenSize{width: 1200.0, height: 600.0})
+        .insert_resource(MousePosition{ position: Vec2::ZERO })
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, sprite_movement::sprite_movement)
         .add_systems(FixedUpdate, mouse_position_system)
         .add_systems(FixedUpdate, mouse_click_system)
         .add_systems(FixedUpdate, print_screen_size)
+        .add_systems(FixedUpdate, projectile_movement_system)
         .run();
 }
 
