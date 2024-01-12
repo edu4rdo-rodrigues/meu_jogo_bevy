@@ -1,3 +1,4 @@
+use bevy::math::vec3;
 use bevy::prelude::CursorMoved;
 use bevy::prelude::*;
 use bevy::ecs::prelude::{Res, ResMut, Resource};
@@ -30,6 +31,8 @@ pub struct ScreenSize {
 // Implemente o trait Resource para ScreenSize
 impl Resource for ScreenSize {}
 
+
+
 // Adicione uma nova estrutura de recursos para armazenar a velocidade do projetil
 #[derive(Debug, Component)]
 pub struct ProjectileSpeed(pub Vec3);
@@ -39,6 +42,7 @@ pub struct ProjectileSpeed(pub Vec3);
 // Variável global para armazenar os valores das posições do mouse
 //static mut MOUSE_POSITION: Option<Vec2> = None;
 //static mut SCREEN_SIZE: Option<ScreenSize> = None;
+static mut PLAYER_POSITION: Option<Vec3> = Some(Vec3::ZERO);
 static mut MOUSE_POSITION: Option<Vec2> = Some(Vec2::ZERO);
 static mut SCREEN_SIZE: Option<ScreenSize> = Some(ScreenSize { width: 0.0, height: 0.0 });
 
@@ -70,7 +74,43 @@ fn print_screen_size(
         // Atualiza o recurso ScreenSize
         *screen_size = new_screen_size;
 
-        println!("Screen Size: {} x {}", width, height);
+        //println!("Screen Size: {} x {}", width, height);
+    }
+}
+
+fn monitor_player_position_system(
+    screen_size: Res<ScreenSize>,
+    query: Query<(&Player, &Transform)>,
+) {
+    for (_, transform) in query.iter() {
+        let width: f32 = screen_size.width / 2.0;
+        let height: f32 = screen_size.height / 2.0;
+        // Acessa a posição do jogador a partir do componente Transform
+        //let mut player_position = transform.translation;
+        let player_position_x: f32 = transform.translation.x - width + screen_size.width;
+        let player_position_y: f32 = -transform.translation.y + height;
+        let player_position_z: f32 = transform.translation.z;
+
+        //let mut new_player_position = Vec3::new(player_position_x, player_position_y, player_position_z);
+
+        // Atualiza a variável global PLAYER_POSITION
+        unsafe {
+            PLAYER_POSITION = Some(vec3(player_position_x, player_position_y, player_position_z));
+        };
+
+        // Print the position of the player
+       /*println!(
+            "Player Position: X:{}, Y:{}, Z:{}",
+            player_position_x, player_position_y, player_position_z
+        );*/
+
+        unsafe {
+            if let Some(player_position) = PLAYER_POSITION {
+                // Print PLAYER_POSITION at a different point in the update cycle
+                //println!("PLAYER_POSITION: {:?}", player_position);
+            };
+        };
+
     }
 }
 
@@ -90,7 +130,10 @@ fn mouse_click_system(
     asset_server: Res<AssetServer>,
     screen_size: Res<ScreenSize>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mouse_position: Res<MousePosition>,
+    query: Query<(&Player, &Transform)>,
+    //mut player_position: ResMut<PlayerPosition>,
+    //mut player_position: ResMut<PlayerPosition>,
+    //mouse_position: Res<MousePosition>,
     //mut query: Query<(&Projectile, &mut Transform, &ProjectileSpeed)>,
 ) {
 
@@ -99,7 +142,7 @@ fn mouse_click_system(
         // Recuperar a variável global MOUSE_POSITION
         unsafe {
             if let Some(mouse_position) = MOUSE_POSITION {
-                println!("Mouse Position: Vec2({}, {})", mouse_position.x, mouse_position.y);
+                //println!("Mouse Position: Vec2({}, {})", mouse_position.x, mouse_position.y);
                     // Obtém os valores de largura e altura da tela armazenados globalmente
                 let width = screen_size.width / 2.0;
                 let height = screen_size.height / 2.0;
@@ -107,29 +150,70 @@ fn mouse_click_system(
                 let heightdff = mouse_position.y - height;
 
                 let projectile_position = Vec3::new(widthdff, -heightdff, 0.0);
-                let initial_position = Vec3::new(0.0, 0.0, 0.0);
 
-                let direction = (projectile_position - initial_position).normalize();
+                
+                //println!("player_position: {:?}", *player_position);
 
-                println!("Mouse clicked at width: {}", widthdff);
+                //let mut initial_position = Vec3::new(0.0, 0.0, 0.0);
 
-                commands.spawn(
-                    SpriteBundle {
-                    texture: asset_server.load("../assets/player.png"),
-                    transform: Transform::from_translation(Vec3::new(widthdff, -heightdff, 0.)),
-                    ..SpriteBundle::default()
-                }).insert(Projectile)
-                .insert(Transform::from_translation(initial_position))
-                .insert(ProjectileSpeed(300.0 * direction));
+                //let direction = (projectile_position + initial_position).normalize();
 
-                if mouse_button_input.just_pressed(MouseButton::Right) {
-                    println!("Right mouse button clicked!");
-                }
+
+
+                //println!("Mouse clicked at width: {}", widthdff);
+                //println!("player_position: {}", player_position.player_position);
+
+
+                unsafe {
+                    if let Some(player_position) = PLAYER_POSITION {
+                        for (_, transform) in query.iter() {
+                            let width: f32 = screen_size.width / 2.0;
+                            let height: f32 = screen_size.height / 2.0;
+                            // Acessa a posição do jogador a partir do componente Transform
+                            //let mut player_position = transform.translation;
+                            let player_position_x: f32 = transform.translation.x;
+                            let player_position_y: f32 = transform.translation.y;
+                            let player_position_z: f32 = transform.translation.z;
+
+                            let mut player_positions = Vec3::new(player_position_x, player_position_y, player_position_z);
+                            let initial_position = player_positions;
+                            let direction = (projectile_position - initial_position).normalize();
+
+                            println!("player_positions: {:?}", player_positions);
+                            println!("direction: {:?}", direction);
+
+                            commands.spawn(
+                                SpriteBundle {
+                                texture: asset_server.load("../assets/player.png"),
+                                transform: Transform::from_translation(initial_position),
+                                ..SpriteBundle::default()
+                            })
+                            .insert(Projectile)
+                            //.insert(Transform::from_translation(initial_position));
+                            .insert(ProjectileSpeed(1000.0 * direction));
+            
+                            if mouse_button_input.just_pressed(MouseButton::Right) {
+                                println!("Right mouse button clicked!");
+                            }
+                    
+                        }
+                        let mut initial_position = player_position;
+                        let direction = (projectile_position - initial_position).normalize();
+
+                        println!("PLAYER_POSITION: {:?}", player_position);
+
+
+                    };
+                };
+            
+
+                
             
                 // Update projectile positions based on speed
                 /*for (_, mut transform, speed) in query.iter_mut() {
                     transform.translation += speed.0 * 10.0; // Assuming TIME_STEP is the time step between frames
                 }*/
+                
             }
         }
     }
@@ -145,14 +229,16 @@ fn mouse_click_system(
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .insert_resource(ScreenSize{width: 1200.0, height: 600.0})
+        .insert_resource(ScreenSize{width: 1280.0, height: 720.0})
         .insert_resource(MousePosition{ position: Vec2::ZERO })
         .add_systems(Startup, setup)
+        
         .add_systems(FixedUpdate, sprite_movement::sprite_movement)
         .add_systems(FixedUpdate, mouse_position_system)
         .add_systems(FixedUpdate, mouse_click_system)
         .add_systems(FixedUpdate, print_screen_size)
         .add_systems(FixedUpdate, projectile_movement_system)
+        .add_systems(FixedUpdate, monitor_player_position_system)
         .run();
 }
 
@@ -181,9 +267,9 @@ fn setup(
     unsafe {
         MOUSE_POSITION = Some(Vec2::new(0.0, 0.0));
     }
-    unsafe {
-        SCREEN_SIZE = Some(ScreenSize { width: 0.0, height: 0.0 });
-    }
+    /*unsafe {
+        PLAYER_POSITION = Some(PlayerPosition{x:0.0, y:0.0, z:0.0});
+    }*/
         
 }
 
